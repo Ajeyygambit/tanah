@@ -10,17 +10,18 @@ The answer is reported even when it is unflattering. The 12-week pilot model in 
 
 | File | What it does | Needs |
 |---|---|---|
-| [`demos/tanah-3d-workflow.html`](demos/tanah-3d-workflow.html) | The 78-second 3D film across three chapters: **before** (household bin → municipal compactor → landfill, plus purchased compost arriving separately), **the intervention** (5 L caddies → 200 m transfer → weighing → contamination removal → carbon layering → four-stage maturation), **after** (wheelbarrow to adjacent beds, root-zone application, closed local loop while the landfill route fades). Play/pause/replay and chapter skip. | Internet (Three.js 0.160 ES module) **and a local server** |
+| [`prototype/index.html`](prototype/index.html) | The 78-second 3D film across three chapters: **before** (household bin → municipal compactor → landfill, plus purchased compost arriving separately), **the intervention** (5 L caddies → 200 m transfer → weighing → contamination removal → carbon layering → four-stage maturation), **after** (wheelbarrow to adjacent beds, root-zone application, closed local loop while the landfill route fades). Play/pause/replay and chapter skip. | Internet (Three.js 0.160 ES module) **and a local server** |
 | [`demos/tanah-composting-instrument.html`](demos/tanah-composting-instrument.html) | The pilot instrument: weigh-in ledger, cash-flow model, steady-state scale simulator (200 → 20,000 households, paid vs. volunteer labour), treated-vs-control landscape plots, 12-week participation audit, and an 8-step guided pitch mode. | Internet (Tailwind, Lucide, Google Fonts) |
 
 ### Running them
 
-`tanah-composting-instrument.html` opens by double-click. `tanah-3d-workflow.html` loads Three.js as an ES module, which browsers block on `file://` origins — serve the folder:
+`demos/tanah-composting-instrument.html` opens by double-click.
+
+`prototype/` is a Vite project because the film loads Three.js as an ES module, which browsers block on `file://` origins:
 
 ```bash
-cd demos
-python -m http.server 8000
-# then open http://localhost:8000/tanah-3d-workflow.html
+cd prototype
+npm install && npm run dev     # or: python -m http.server 8000
 ```
 
 ## Specification

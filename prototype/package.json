@@ -1,0 +1,18 @@
+{
+  "name": "tanah-3d-workflow-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Realistic 3D interactive animation prototype demonstrating the TANAH decentralised township food-waste composting workflow in Malaysia.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --open",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --open"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.1.0"
+  }
+}
