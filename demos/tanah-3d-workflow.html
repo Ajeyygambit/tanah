@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TANAH — 3D Physical Workflow Demonstration</title>
+  <style>
+    :root {
+      --paper: #F7F4EE;
+      --surface: rgba(28, 25, 23, 0.84);
+      --ink: #1C1917;
+      --muted: #D6D0C4;
+      --rule: rgba(226, 218, 208, 0.28);
+      --clay: #9A3B1B;
+      --soil: #6B4F2A;
+      --leaf: #4A5D23;
+      --amber: #B4761F;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1C1917;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--paper);
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
+
+    /* Cinematic Letterbox & Subtle Vignette */
+    .cinematic-frame {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      box-shadow: inset 0 0 110px rgba(15, 13, 11, 0.55);
+    }
+
+    /* Top Chapter & Provenance Banner */
+    #hud-top {
+      position: fixed;
+      top: 28px;
+      left: 36px;
+      right: 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .chapter-card {
+      background: var(--surface);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--rule);
+      border-left: 4px solid var(--amber);
+      border-radius: 4px;
+      padding: 14px 20px;
+      max-width: 640px;
+      transition: opacity 0.35s ease, border-color 0.35s ease;
+    }
+
+    .chapter-eyebrow {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .chapter-title {
+      font-family: Georgia, 'Fraunces', serif;
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.2;
+      color: var(--paper);
+    }
+
+    .chapter-caption {
+      font-size: 15px;
+      line-height: 1.45;
+      color: #EAE4D8;
+      margin-top: 6px;
+    }
+
+    .provenance-badge {
+      background: var(--surface);
+      backdrop-filter: blur(8px);
+      border: 1px dashed rgba(247, 244, 238, 0.45);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+      line-height: 1.4;
+    }
+
+    .provenance-badge strong {
+      color: var(--paper);
+      display: block;
+    }
+
+    /* Dynamic 3D World Floating Callout Pill */
+    #world-callout {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(28, 25, 23, 0.9);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 8px 14px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      color: var(--paper);
+      pointer-events: none;
+      z-index: 3;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      white-space: nowrap;
+    }
+
+    /* Split Screen Comparison Divider (Scene 3) */
+    #split-compare-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .split-banner {
+      position: absolute;
+      bottom: 110px;
+      padding: 10px 16px;
+      background: rgba(28, 25, 23, 0.86);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+    }
+
+    .split-banner.left {
+      left: 36px;
+      border-left: 3px solid var(--clay);
+    }
+
+    .split-banner.right {
+      right: 36px;
+      border-left: 3px solid var(--amber);
+    }
+
+    /* Scene 10 Final Before-and-After Overlay */
+    #final-comparison-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+      background: radial-gradient(circle at center, rgba(28, 25, 23, 0.72) 0%, rgba(28, 25, 23, 0.92) 100%);
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .final-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      max-width: 980px;
+      width: 100%;
+      margin-bottom: 28px;
+    }
+
+    .comparison-column {
+      background: rgba(247, 244, 238, 0.06);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 24px 28px;
+    }
+
+    .comparison-column.before {
+      border-top: 4px solid var(--clay);
+    }
+
+    .comparison-column.after {
+      border-top: 4px solid var(--leaf);
+    }
+
+    .comparison-column h3 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      color: var(--paper);
+    }
+
+    .comparison-column ul {
+      list-style: none;
+    }
+
+    .comparison-column li {
+      position: relative;
+      padding-left: 18px;
+      margin-bottom: 10px;
+      font-size: 16px;
+      line-height: 1.5;
+      color: #EAE4D8;
+    }
+
+    .comparison-column li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--muted);
+    }
+
+    .final-headline-box {
+      text-align: center;
+      max-width: 860px;
+      border-top: 1px solid var(--rule);
+      padding-top: 22px;
+    }
+
+    .final-brand {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 0.25em;
+      color: var(--amber);
+      margin-bottom: 8px;
+    }
+
+    .final-headline {
+      font-family: Georgia, 'Fraunces', serif;
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--paper);
+      margin-bottom: 10px;
+    }
+
+    .final-subline {
+      font-size: 16px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Minimal Presentation Transport Controls */
+    #transport-bar {
+      position: fixed;
+      bottom: 24px;
+      left: 36px;
+      right: 36px;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 10px 16px;
+    }
+
+    .ctrl-btn {
+      background: rgba(247, 244, 238, 0.08);
+      border: 1px solid var(--rule);
+      color: var(--paper);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .ctrl-btn:hover {
+      background: rgba(247, 244, 238, 0.18);
+    }
+
+    .ctrl-btn.active {
+      background: var(--leaf);
+      border-color: #6c8735;
+    }
+
+    .timeline-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(247, 244, 238, 0.15);
+      border-radius: 3px;
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .timeline-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      background: var(--amber);
+    }
+
+    .time-readout {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+      min-width: 92px;
+      text-align: right;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div class="cinematic-frame"></div>
+
+  <!-- Top Chapter & Provenance Banner -->
+  <div id="hud-top">
+    <div class="chapter-card" id="chapter-card">
+      <div class="chapter-eyebrow" id="hud-chapter">CHAPTER 1 · SCENE 1 (00:00 – 00:05)</div>
+      <div class="chapter-title" id="hud-title">BEFORE TANAH</div>
+      <div class="chapter-caption" id="hud-caption">Food waste is collected and transported away.</div>
+    </div>
+    <div class="provenance-badge" id="hud-provenance">
+      <strong>PROVENANCE: ILLUSTRATIVE WORKFLOW</strong>
+      Physical layout: 6 neighbourhood nodes (&lt;200 m to beds)
+    </div>
+  </div>
+
+  <!-- Floating 3D Callout -->
+  <div id="world-callout">≈ ILLUSTRATIVE DEMO READOUT: 14.2 kg</div>
+
+  <!-- Scene 3 Dual Flow Indicator -->
+  <div id="split-compare-overlay">
+    <div class="split-banner left">OUTBOUND: Municipal Waste Compactor → Landfill</div>
+    <div class="split-banner right">INBOUND: Separate Supplier Truck → Purchased Soil/Compost</div>
+  </div>
+
+  <!-- Scene 10 Final Comparison Frame -->
+  <div id="final-comparison-modal">
+    <div class="final-grid">
+      <div class="comparison-column before">
+        <h3>LEFT: BEFORE TANAH</h3>
+        <ul>
+          <li>Food waste travels to landfill.</li>
+          <li>Landscaping inputs arrive separately.</li>
+        </ul>
+      </div>
+      <div class="comparison-column after">
+        <h3>RIGHT: TANAH</h3>
+        <ul>
+          <li>Food waste is collected locally.</li>
+          <li>Suitable material is composted nearby.</li>
+          <li>Mature compost is applied to nearby landscape beds.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="final-headline-box">
+      <div class="final-brand">TANAH</div>
+      <div class="final-headline">TURN TOWNSHIP FOOD WASTE INTO A LOCAL RESOURCE</div>
+      <div class="final-subline">
+        Measure the waste diverted, the cost per tonne, and the performance of treated versus control landscape beds.
+      </div>
+    </div>
+  </div>
+
+  <!-- Minimal Presentation Controls -->
+  <div id="transport-bar">
+    <button class="ctrl-btn" id="btn-play-pause">PAUSE</button>
+    <button class="ctrl-btn" id="btn-replay">REPLAY</button>
+    <button class="ctrl-btn" id="btn-ch1">1. BEFORE TANAH</button>
+    <button class="ctrl-btn" id="btn-ch2">2. TANAH INTERVENTION</button>
+    <button class="ctrl-btn" id="btn-ch3">3. AFTER TANAH</button>
+    <div class="timeline-track" id="timeline-track">
+      <div class="timeline-fill" id="timeline-fill"></div>
+    </div>
+    <div class="time-readout" id="time-readout">00:00 / 01:18</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ============================================================================
+    // 1. SCENE TIMELINE SPECIFICATION (78 SECONDS TOTAL, 10 CONSECUTIVE SCENES)
+    // ============================================================================
+    const TOTAL_DURATION = 78.0;
+
+    const SCENES = [
+      {
+        id: 1,
+        chapter: 1,
+        start: 0,
+        end: 5,
+        eyebrow: 'CHAPTER 1 · SCENE 1 · ESTABLISHING TOWNSHIP',
+        title: 'BEFORE TANAH',
+        caption: 'Food waste is collected and transported away.',
+        provenance: 'PROVENANCE: ILLUSTRATIVE MALAYSIAN TOWNSHIP GEOMETRY',
+        accent: '#9A3B1B'
+      },
+      {
+        id: 2,
+        chapter: 1,
+        start: 5,
+        end: 13,
+        eyebrow: 'CHAPTER 1 · SCENE 1B · HOUSEHOLD DISPOSAL',
+        title: 'BEFORE TANAH',
+        caption: 'Food waste is collected and transported away.',
+        provenance: 'PROVENANCE: ASSUMED 1.17 kg/person/day (30.6% food share)',
+        accent: '#9A3B1B'
+      },
+      {
+        id: 3,
+        chapter: 1,
+        start: 13,
+        end: 20,
+        eyebrow: 'CHAPTER 1 · SCENE 2 · CONVENTIONAL HAULAGE & LANDFILL',
+        title: 'BEFORE TANAH',
+        caption: 'Food waste is collected and transported away.',
+        provenance: 'BENCHMARK: Selangor Landfill Tipping Fee RM43/tonne (Illustrative route)',
+        accent: '#9A3B1B'
+      },
+      {
+        id: 4,
+        chapter: 1,
+        start: 20,
+        end: 25,
+        eyebrow: 'CHAPTER 1 · SCENE 3 · SEPARATE COMPOST PROCUREMENT',
+        title: 'BEFORE TANAH',
+        caption: 'Food waste goes out. Landscaping inputs come in.',
+        provenance: 'CONVENTIONAL BASELINE: Separate waste & landscaping contracts',
+        accent: '#B4761F'
+      },
+      {
+        id: 5,
+        chapter: 2,
+        start: 25,
+        end: 30,
+        eyebrow: 'CHAPTER 2 · SCENE 4 · SOURCE SEPARATION & LOCAL COLLECTION',
+        title: 'TANAH: COMPOST CLOSE TO WHERE IT IS USED',
+        caption: 'Household food scraps are separated into caddies and brought to a neighbourhood point within 200 m.',
+        provenance: 'OPERATIONAL MODEL: 5–8 decentralised points (<200 m to planting beds)',
+        accent: '#4A5D23'
+      },
+      {
+        id: 6,
+        chapter: 2,
+        start: 30,
+        end: 38,
+        eyebrow: 'CHAPTER 2 · SCENE 5 · MANUAL WEIGHING & SORTING',
+        title: 'TANAH: COMPOST CLOSE TO WHERE IT IS USED',
+        caption: 'Collected food waste is weighed manually and inspected to remove non-compostable contaminants.',
+        provenance: '≈ ILLUSTRATIVE DEMO READOUT: 14.2 kg in · 1.1 kg contamination removed',
+        accent: '#4A5D23'
+      },
+      {
+        id: 7,
+        chapter: 2,
+        start: 38,
+        end: 48,
+        eyebrow: 'CHAPTER 2 · SCENES 6 & 7 · LOCAL COMPOSTING & MATURATION',
+        title: 'TANAH: COMPOST CLOSE TO WHERE IT IS USED',
+        caption: 'Collect. Sort. Compost. Mature.',
+        provenance: 'ILLUSTRATIVE TIME-LAPSE: Fresh → Active → Maturing → Finished (≈25% yield)',
+        accent: '#6B4F2A'
+      },
+      {
+        id: 8,
+        chapter: 3,
+        start: 48,
+        end: 58,
+        eyebrow: 'CHAPTER 3 · SCENE 8 · COMPOST RETURNS TO THE LANDSCAPE',
+        title: 'AFTER TANAH: LOCAL SOIL APPLICATION',
+        caption: 'Mature compost is moved a short distance and applied to the soil around existing township plants.',
+        provenance: 'FIELD PROTOCOL: Root-zone soil application · Treated vs Control beds',
+        accent: '#4A5D23'
+      },
+      {
+        id: 9,
+        chapter: 3,
+        start: 58,
+        end: 70,
+        eyebrow: 'CHAPTER 3 · SCENE 9 · THE PROPOSED LOCAL LOOP',
+        title: 'Township food waste → Local composting → Landscape use.',
+        caption: 'Proposed decentralised routing across neighbourhood nodes within 200 m of landscape beds.',
+        provenance: 'PROPOSED MODEL: Partial diversion subject to participation & contamination',
+        accent: '#4A5D23'
+      },
+      {
+        id: 10,
+        chapter: 3,
+        start: 70,
+        end: 78,
+        eyebrow: 'CHAPTER 3 · SCENE 10 · FINAL COMPARISON',
+        title: 'TURN TOWNSHIP FOOD WASTE INTO A LOCAL RESOURCE',
+        caption: 'Measure the waste diverted, the cost per tonne, and the performance of treated versus control landscape beds.',
+        provenance: 'FALSIFIABLE EVALUATION: Cost/tonne vs RM43 landfill & RM216 industrial benchmarks',
+        accent: '#4A5D23'
+      }
+    ];
+
+    // ============================================================================
+    // 2. THREE.JS RENDERER, SCENE, LIGHTING & CAMERA SETUP
+    // ============================================================================
+    const container = document.getElementById('canvas-container');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xd8e4ea);
+    scene.fog = new THREE.FogExp2(0xd8e4ea, 0.0028);
+
+    const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.5, 600);
+
+    // Humid Malaysian Daylight Illumination
+    const hemiLight = new THREE.HemisphereLight(0xfff8e7, 0x4c5c38, 0.85);
+    hemiLight.position.set(0, 120, 0);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfff1d0, 1.65);
+    sunLight.position.set(65, 110, 55);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 10;
+    sunLight.shadow.camera.far = 320;
+    const d = 110;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+
+    // ============================================================================
+    // 3. SHARED MATERIALS PALETTE (TROPICAL MALAYSIAN ARCHITECTURE & LANDSCAPE)
+    // ============================================================================
+    const MATS = {
+      groundGrass: new THREE.MeshStandardMaterial({ color: 0x566f38, roughness: 0.92 }),
+      asphalt: new THREE.MeshStandardMaterial({ color: 0x333538, roughness: 0.85 }),
+      roadLine: new THREE.MeshStandardMaterial({ color: 0xe6dec8, roughness: 0.6 }),
+      walkway: new THREE.MeshStandardMaterial({ color: 0xb8afa0, roughness: 0.88 }),
+      buildingWall: new THREE.MeshStandardMaterial({ color: 0xf1ece1, roughness: 0.75 }),
+      buildingAccent: new THREE.MeshStandardMaterial({ color: 0xc8b9a6, roughness: 0.78 }),
+      terracottaRoof: new THREE.MeshStandardMaterial({ color: 0x9c4a2d, roughness: 0.72 }),
+      windowGlass: new THREE.MeshStandardMaterial({ color: 0x3b5363, roughness: 0.25, metalness: 0.4 }),
+      palmTrunk: new THREE.MeshStandardMaterial({ color: 0x69543e, roughness: 0.9 }),
+      tropicalLeaf: new THREE.MeshStandardMaterial({ color: 0x3d6b2c, roughness: 0.65 }),
+      darkFoliage: new THREE.MeshStandardMaterial({ color: 0x2c5220, roughness: 0.7 }),
+      planterCurb: new THREE.MeshStandardMaterial({ color: 0x9e9589, roughness: 0.85 }),
+      bedSoilBase: new THREE.MeshStandardMaterial({ color: 0x5c4630, roughness: 0.95 }),
+      treatedSoilRich: new THREE.MeshStandardMaterial({ color: 0x362617, roughness: 0.92 }),
+      municipalBin: new THREE.MeshStandardMaterial({ color: 0x2b3a30, roughness: 0.6 }),
+      foodCaddy: new THREE.MeshStandardMaterial({ color: 0x4A5D23, roughness: 0.5 }),
+      rejectBin: new THREE.MeshStandardMaterial({ color: 0x9A3B1B, roughness: 0.5 }),
+      timberBay: new THREE.MeshStandardMaterial({ color: 0x7c5836, roughness: 0.85 }),
+      corrugatedRoof: new THREE.MeshStandardMaterial({ color: 0x7a8288, roughness: 0.45, metalness: 0.5 }),
+      scaleMetal: new THREE.MeshStandardMaterial({ color: 0x8c969e, roughness: 0.35, metalness: 0.7 }),
+      foodScraps: new THREE.MeshStandardMaterial({ color: 0xc88a3b, roughness: 0.8 }),
+      riceScraps: new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.7 }),
+      vegScraps: new THREE.MeshStandardMaterial({ color: 0x5a8f3d, roughness: 0.75 }),
+      plasticContam: new THREE.MeshStandardMaterial({ color: 0x2979ff, roughness: 0.3 }),
+      dryLeaves: new THREE.MeshStandardMaterial({ color: 0x8f622c, roughness: 0.9 }),
+      truckCabWhite: new THREE.MeshStandardMaterial({ color: 0xedeae2, roughness: 0.4 }),
+      compactorGreen: new THREE.MeshStandardMaterial({ color: 0x36593e, roughness: 0.55 }),
+      supplierBedBlue: new THREE.MeshStandardMaterial({ color: 0x395873, roughness: 0.55 }),
+      compostBagYellow: new THREE.MeshStandardMaterial({ color: 0xd49b35, roughness: 0.65 }),
+      wheelTire: new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.9 }),
+      landfillEarth: new THREE.MeshStandardMaterial({ color: 0x635341, roughness: 0.96 }),
+      skinTone: new THREE.MeshStandardMaterial({ color: 0xc68b59, roughness: 0.65 }),
+      residentShirtA: new THREE.MeshStandardMaterial({ color: 0x3b6998, roughness: 0.7 }),
+      residentShirtB: new THREE.MeshStandardMaterial({ color: 0xb85d43, roughness: 0.7 }),
+      workerVest: new THREE.MeshStandardMaterial({ color: 0xd9822b, roughness: 0.6 }),
+      pantsDark: new THREE.MeshStandardMaterial({ color: 0x2c3038, roughness: 0.8 })
+    };
+
+    // ============================================================================
+    // 4. REUSABLE PROCEDURAL ASSET BUILDERS
+    // ============================================================================
+    function enableShadows(obj) {
+      obj.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+    }
+
+    // 4.1 Malaysian Medium-Density Apartment Block (5 Storeys with Terracotta Pitch Roof & Sunshades)
+    function createApartmentBlock(width = 26, depth = 12, floors = 5) {
+      const group = new THREE.Group();
+      const floorHeight = 3.2;
+      const totalHeight = floors * floorHeight;
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(width, totalHeight, depth), MATS.buildingWall);
+      body.position.y = totalHeight / 2;
+      group.add(body);
+
+      // Ground floor tropical piloti / void deck apron
+      const plinth = new THREE.Mesh(new THREE.BoxGeometry(width + 0.6, 0.5, depth + 0.6), MATS.buildingAccent);
+      plinth.position.y = 0.25;
+      group.add(plinth);
+
+      // Horizontal tropical sun-shading ledges & windows
+      const cols = Math.floor(width / 3.2);
+      for (let f = 0; f < floors; f++) {
+        const y = f * floorHeight + 1.8;
+        const ledge = new THREE.Mesh(new THREE.BoxGeometry(width + 0.4, 0.22, depth + 0.8), MATS.buildingAccent);
+        ledge.position.y = y + 0.75;
+        group.add(ledge);
+
+        for (let c = 0; c < cols; c++) {
+          const x = -width / 2 + 2.0 + c * 3.1;
+          const winFront = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 0.15), MATS.windowGlass);
+          winFront.position.set(x, y, depth / 2 + 0.02);
+          group.add(winFront);
+
+          const winBack = winFront.clone();
+          winBack.position.z = -depth / 2 - 0.02;
+          group.add(winBack);
+        }
+      }
+
+      // Pitched Tropical Terracotta Roof
+      const roofHeight = 2.8;
+      const roofGeo = new THREE.ConeGeometry(Math.max(width, depth) * 0.76, roofHeight, 4);
+      const roof = new THREE.Mesh(roofGeo, MATS.terracottaRoof);
+      roof.position.y = totalHeight + roofHeight / 2;
+      roof.rotation.y = Math.PI / 4;
+      roof.scale.set(1, 1, depth / width);
+      group.add(roof);
+
+      enableShadows(group);
+      return group;
+    }
+
+    // 4.2 Tropical Palm & Shade Trees
+    function createTropicalTree(scale = 1.0, isPalm = false) {
+      const group = new THREE.Group();
+      if (isPalm) {
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 5.5, 8), MATS.palmTrunk);
+        trunk.position.y = 2.75;
+        group.add(trunk);
+
+        for (let i = 0; i < 7; i++) {
+          const frond = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.12, 0.55), MATS.tropicalLeaf);
+          frond.position.set(0, 5.4, 0);
+          frond.rotation.y = (i * Math.PI * 2) / 7;
+          frond.rotation.z = -0.35;
+          group.add(frond);
+        }
+      } else {
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, 3.2, 8), MATS.palmTrunk);
+        trunk.position.y = 1.6;
+        group.add(trunk);
+
+        const canopy1 = new THREE.Mesh(new THREE.DodecahedronGeometry(2.1, 1), MATS.tropicalLeaf);
+        canopy1.position.set(0, 4.0, 0);
+        canopy1.scale.set(1.2, 0.85, 1.2);
+        group.add(canopy1);
+
+        const canopy2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.5, 1), MATS.darkFoliage);
+        canopy2.position.set(1.1, 3.5, 0.6);
+        group.add(canopy2);
+      }
+      group.scale.setScalar(scale);
+      enableShadows(group);
+      return group;
+    }
+
+    // 4.3 Landscaped Planting Bed (Treated & Control Beds within <200m of Compost Bay)
+    function createLandscapeBed(width = 10, depth = 3.6) {
+      const group = new THREE.Group();
+
+      const curb = new THREE.Mesh(new THREE.BoxGeometry(width, 0.36, depth), MATS.planterCurb);
+      curb.position.y = 0.18;
+      group.add(curb);
+
+      const soilMat = MATS.bedSoilBase.clone();
+      const soil = new THREE.Mesh(new THREE.BoxGeometry(width - 0.4, 0.32, depth - 0.4), soilMat);
+      soil.position.y = 0.24;
+      group.add(soil);
+
+      // Fresh compost top-dressing layer (initially invisible until Scene 8 application)
+      const mulchPatch = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.4, 1.6, 0.08, 16),
+        MATS.treatedSoilRich
+      );
+      mulchPatch.position.set(-2.0, 0.41, 0);
+      mulchPatch.scale.set(0.01, 1, 0.01);
+      group.add(mulchPatch);
+
+      // Tropical shrubs arranged neatly in the bed
+      const shrubs = [];
+      for (let i = -width / 2 + 1.4; i <= width / 2 - 1.4; i += 1.8) {
+        const shrubGroup = new THREE.Group();
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.5, 6), MATS.palmTrunk);
+        stem.position.y = 0.25;
+        shrubGroup.add(stem);
+
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(0.58, 10, 8), MATS.tropicalLeaf);
+        crown.position.y = 0.68;
+        crown.scale.set(1.1, 0.85, 1.1);
+        shrubGroup.add(crown);
+
+        shrubGroup.position.set(i, 0.35, (Math.sin(i * 2) * 0.4));
+        group.add(shrubGroup);
+        shrubs.push(shrubGroup);
+      }
+
+      enableShadows(group);
+      return { group, soil, soilMat, mulchPatch, shrubs };
+    }
+
+    // 4.4 Articulated Human Figure (Residents & Township Workers)
+    function createHumanFigure(shirtMat = MATS.residentShirtA) {
+      const group = new THREE.Group();
+
+      const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.18), MATS.pantsDark);
+      leftLeg.position.set(-0.12, 0.375, 0);
+      const rightLeg = leftLeg.clone();
+      rightLeg.position.x = 0.12;
+      group.add(leftLeg, rightLeg);
+
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.68, 0.26), shirtMat);
+      torso.position.y = 1.08;
+      group.add(torso);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), MATS.skinTone);
+      head.position.y = 1.62;
+      group.add(head);
+
+      const rightArmPivot = new THREE.Group();
+      rightArmPivot.position.set(0.3, 1.35, 0);
+      const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.6, 0.14), shirtMat);
+      rightArm.position.y = -0.25;
+      rightArmPivot.add(rightArm);
+      group.add(rightArmPivot);
+
+      const leftArmPivot = new THREE.Group();
+      leftArmPivot.position.set(-0.3, 1.35, 0);
+      const leftArm = rightArm.clone();
+      leftArmPivot.add(leftArm);
+      group.add(leftArmPivot);
+
+      enableShadows(group);
+      return { group, leftLeg, rightLeg, rightArmPivot, leftArmPivot };
+    }
+
+    // 4.5 Waste Collection & Composting Delivery Vehicles
+    function createTruck(isCompactor = true) {
+      const group = new THREE.Group();
+
+      // Chassis
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.45, 2.4), MATS.pantsDark);
+      chassis.position.y = 0.7;
+      group.add(chassis);
+
+      // Cab
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.1, 2.3), MATS.truckCabWhite);
+      cab.position.set(2.15, 1.75, 0);
+      group.add(cab);
+
+      const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 2.0), MATS.windowGlass);
+      windshield.position.set(3.08, 2.0, 0);
+      group.add(windshield);
+
+      // Rear body (tilts to unload in landfill scene)
+      const bodyPivot = new THREE.Group();
+      bodyPivot.position.set(-2.9, 0.95, 0);
+
+      if (isCompactor) {
+        const compactor = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.2, 2.35), MATS.compactorGreen);
+        compactor.position.set(2.1, 1.1, 0);
+        bodyPivot.add(compactor);
+      } else {
+        const flatbed = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.6, 2.35), MATS.supplierBedBlue);
+        flatbed.position.set(2.1, 0.3, 0);
+        bodyPivot.add(flatbed);
+
+        // Stacked sacks of purchased compost
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 2; c++) {
+            const sack = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.38, 0.75), MATS.compostBagYellow);
+            sack.position.set(1.0 + r * 1.1, 0.75, -0.45 + c * 0.9);
+            bodyPivot.add(sack);
+          }
+        }
+      }
+      group.add(bodyPivot);
+
+      // Wheels
+      const wheelGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.35, 16);
+      wheelGeo.rotateX(Math.PI / 2);
+      const wheelPositions = [
+        [2.0, 0.48, 1.15],
+        [2.0, 0.48, -1.15],
+        [-1.8, 0.48, 1.15],
+        [-1.8, 0.48, -1.15]
+      ];
+      wheelPositions.forEach(([x, y, z]) => {
+        const w = new THREE.Mesh(wheelGeo, MATS.wheelTire);
+        w.position.set(x, y, z);
+        group.add(w);
+      });
+
+      enableShadows(group);
+      return { group, bodyPivot };
+    }
+
+    // 4.6 Decentralised 3-Bay Neighbourhood Composting Station (Appendix A Spec)
+    function createCompostStation() {
+      const group = new THREE.Group();
+
+      // Concrete pad
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.16, 4.4), MATS.walkway);
+      pad.position.y = 0.08;
+      group.add(pad);
+
+      // Sheltered corrugated roof on timber posts
+      const postGeo = new THREE.BoxGeometry(0.16, 2.8, 0.16);
+      [
+        [-3.1, 1.4, -1.9],
+        [3.1, 1.4, -1.9],
+        [-3.1, 1.4, 1.9],
+        [3.1, 1.4, 1.9]
+      ].forEach(([x, y, z]) => {
+        const post = new THREE.Mesh(postGeo, MATS.timberBay);
+        post.position.set(x, y, z);
+        group.add(post);
+      });
+
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.12, 4.8), MATS.corrugatedRoof);
+      roof.position.y = 2.85;
+      roof.rotation.x = 0.08;
+      group.add(roof);
+
+      // 3 Timber Pallet Bays (Bay 1: Fresh/Active, Bay 2: Maturing, Bay 3: Finished)
+      const bayWidth = 1.45;
+      const bays = [];
+      for (let b = 0; b < 3; b++) {
+        const bx = -1.6 + b * 1.6;
+        const bayGroup = new THREE.Group();
+        bayGroup.position.set(bx, 0.16, -0.65);
+
+        const backWall = new THREE.Mesh(new THREE.BoxGeometry(bayWidth, 1.1, 0.1), MATS.timberBay);
+        backWall.position.set(0, 0.55, -0.65);
+        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 1.3), MATS.timberBay);
+        leftWall.position.set(-bayWidth / 2, 0.55, 0);
+        const rightWall = leftWall.clone();
+        rightWall.position.x = bayWidth / 2;
+
+        // Compost pile mesh inside the bay
+        const pileMat = new THREE.MeshStandardMaterial({
+          color: b === 0 ? 0xb5823c : b === 1 ? 0x6B4F2A : 0x362617,
+          roughness: 0.94
+        });
+        const pile = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.85, 10), pileMat);
+        pile.position.set(0, 0.42, 0);
+        pile.scale.set(1.1, 0.75, 1.0);
+
+        bayGroup.add(backWall, leftWall, rightWall, pile);
+        group.add(bayGroup);
+        bays.push({ bayGroup, pile, pileMat });
+      }
+
+      // Weighing table & Digital Scale + Sorting Tray (Scene 5)
+      const table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.78, 0.9), MATS.timberBay);
+      table.position.set(-2.1, 0.47, 1.1);
+      group.add(table);
+
+      const scaleBase = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.12, 0.52), MATS.scaleMetal);
+      scaleBase.position.set(-2.1, 0.92, 1.1);
+      group.add(scaleBase);
+
+      // Contamination Reject Bin (Clay Red)
+      const rejectBin = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.26, 0.72, 14), MATS.rejectBin);
+      rejectBin.position.set(-1.05, 0.52, 1.2);
+      group.add(rejectBin);
+
+      // Carbon Source Bins (Dry Tropical Leaves)
+      for (let c = 0; c < 2; c++) {
+        const carbonBin = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.32, 0.82, 14), MATS.dryLeaves);
+        carbonBin.position.set(2.25, 0.57, 0.4 + c * 0.9);
+        group.add(carbonBin);
+      }
+
+      // Compost Thermometer Probe (50 cm probe inserted in active Bay 1)
+      const probeStem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 8), MATS.scaleMetal);
+      probeStem.position.set(-1.6, 0.95, -0.55);
+      probeStem.rotation.z = -0.25;
+      group.add(probeStem);
+
+      enableShadows(group);
+      return { group, bays, scaleBase, rejectBin };
+    }
+
+    // ============================================================================
+    // 5. CONSTRUCT THE MALAYSIAN TOWNSHIP & DISTANT LANDFILL WORLD
+    // ============================================================================
+    const worldGroup = new THREE.Group();
+    scene.add(worldGroup);
+
+    // Base Terrain Plane
+    const terrain = new THREE.Mesh(new THREE.PlaneGeometry(520, 520), MATS.groundGrass);
+    terrain.rotation.x = -Math.PI / 2;
+    terrain.receiveShadow = true;
+    worldGroup.add(terrain);
+
+    // Township Internal Road Network
+    const mainRoad = new THREE.Mesh(new THREE.BoxGeometry(280, 0.08, 9.5), MATS.asphalt);
+    mainRoad.position.set(30, 0.04, 0);
+    mainRoad.receiveShadow = true;
+    worldGroup.add(mainRoad);
+
+    const crossRoad = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.08, 120), MATS.asphalt);
+    crossRoad.position.set(-15, 0.04, -10);
+    crossRoad.receiveShadow = true;
+    worldGroup.add(crossRoad);
+
+    // Dashed Center Road Markings
+    for (let x = -90; x <= 140; x += 8) {
+      const dash = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 0.22), MATS.roadLine);
+      dash.position.set(x, 0.06, 0);
+      worldGroup.add(dash);
+    }
+
+    // Pedestrian Walkway connecting Apartment Block -> Waste Point -> TANAH Compost Point -> Landscape Beds
+    const walkway = new THREE.Mesh(new THREE.BoxGeometry(64, 0.1, 2.8), MATS.walkway);
+    walkway.position.set(-2, 0.05, 8.2);
+    walkway.receiveShadow = true;
+    worldGroup.add(walkway);
+
+    // Apartment Blocks (Consistent Malaysian Residential Context)
+    const blockA = createApartmentBlock(28, 12, 5);
+    blockA.position.set(-34, 0, -18);
+    worldGroup.add(blockA);
+
+    const blockB = createApartmentBlock(26, 12, 5);
+    blockB.position.set(6, 0, -18);
+    worldGroup.add(blockB);
+
+    const blockC = createApartmentBlock(26, 12, 5);
+    blockC.position.set(44, 0, -18);
+    worldGroup.add(blockC);
+
+    const blockD = createApartmentBlock(28, 12, 4);
+    blockD.position.set(-34, 0, 28);
+    worldGroup.add(blockD);
+
+    const blockE = createApartmentBlock(28, 12, 4);
+    blockE.position.set(44, 0, 28);
+    worldGroup.add(blockE);
+
+    // Conventional Municipal Waste Bin Shelter (Near Block A / Main Road)
+    const wasteStation = new THREE.Group();
+    wasteStation.position.set(-24, 0, 7.6);
+    const binPad = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.15, 3.0), MATS.walkway);
+    binPad.position.y = 0.075;
+    wasteStation.add(binPad);
+
+    for (let i = 0; i < 2; i++) {
+      const mBin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.35, 1.0), MATS.municipalBin);
+      mBin.position.set(-1.1 + i * 1.4, 0.75, -0.3);
+      wasteStation.add(mBin);
+    }
+
+    // TANAH Source-Separated Food Waste Drop-off Container
+    const tanahDropBin = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.36, 1.05, 16), MATS.foodCaddy);
+    tanahDropBin.position.set(1.4, 0.6, 0.3);
+    wasteStation.add(tanahDropBin);
+    enableShadows(wasteStation);
+    worldGroup.add(wasteStation);
+
+    // Primary TANAH Decentralised Composting Station (Positioned close to planting beds <200m)
+    const primaryCompostNode = createCompostStation();
+    primaryCompostNode.group.position.set(0, 0, 12.5);
+    worldGroup.add(primaryCompostNode.group);
+
+    // Additional Neighbourhood Composting Nodes (Illustrating the 5–8 node township network for Scene 9)
+    const secondaryNodes = [
+      new THREE.Vector3(-42, 0.2, 14),
+      new THREE.Vector3(-20, 0.2, -32),
+      new THREE.Vector3(22, 0.2, -32),
+      new THREE.Vector3(32, 0.2, 14),
+      new THREE.Vector3(56, 0.2, -6)
+    ];
+    secondaryNodes.forEach((pos) => {
+      const markerGroup = new THREE.Group();
+      markerGroup.position.copy(pos);
+      const shed = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.8, 2.4), MATS.timberBay);
+      shed.position.y = 0.9;
+      const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.12, 2.8), MATS.corrugatedRoof);
+      shedRoof.position.y = 1.86;
+      markerGroup.add(shed, shedRoof);
+      enableShadows(markerGroup);
+      worldGroup.add(markerGroup);
+    });
+
+    // Nearby Township Landscape Planting Beds (Treated Bed & Control Bed)
+    const treatedBed = createLandscapeBed(12, 4.2);
+    treatedBed.group.position.set(15.5, 0, 12.5);
+    worldGroup.add(treatedBed.group);
+
+    const controlBed = createLandscapeBed(10, 3.8);
+    controlBed.group.position.set(29.0, 0, 12.5);
+    worldGroup.add(controlBed.group);
+
+    // Tropical Trees across the Township
+    const treeCoords = [
+      [-48, -8, 1.1, true], [-12, -8, 1.0, false], [24, -8, 1.15, true],
+      [-46, 16, 1.0, false], [-10, 19, 1.2, true], [8, 20, 0.95, false],
+      [22, 21, 1.1, true], [38, 16, 1.05, false], [-28, 16, 0.9, true]
+    ];
+    treeCoords.forEach(([x, z, s, isPalm]) => {
+      const t = createTropicalTree(s, isPalm);
+      t.position.set(x, 0, z);
+      worldGroup.add(t);
+    });
+
+    // Distant Landfill Environment (East down the highway for Scene 2)
+    const landfillGroup = new THREE.Group();
+    landfillGroup.position.set(145, 0, -6);
+    const mound1 = new THREE.Mesh(new THREE.ConeGeometry(24, 9.5, 9), MATS.landfillEarth);
+    mound1.position.set(0, 4.75, -10);
+    mound1.scale.set(1.5, 1, 1.1);
+    const mound2 = new THREE.Mesh(new THREE.ConeGeometry(18, 7.0, 8), MATS.landfillEarth);
+    mound2.position.set(18, 3.5, 6);
+    landfillGroup.add(mound1, mound2);
+
+    // Unloaded waste pile at landfill tipping face
+    const dumpedWastePile = new THREE.Group();
+    dumpedWastePile.position.set(-12, 0.4, 4);
+    for (let i = 0; i < 14; i++) {
+      const bag = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.48, 0),
+        i % 3 === 0 ? MATS.foodScraps : MATS.pantsDark
+      );
+      bag.position.set((Math.random() - 0.5) * 3.0, Math.random() * 0.8, (Math.random() - 0.5) * 2.5);
+      dumpedWastePile.add(bag);
+    }
+    landfillGroup.add(dumpedWastePile);
+    enableShadows(landfillGroup);
+    worldGroup.add(landfillGroup);
+
+    // ============================================================================
+    // 6. DYNAMIC ACTORS, PROPS & ANIMATED WORKFLOW ELEMENTS
+    // ============================================================================
+    // Resident Actor
+    const resident = createHumanFigure(MATS.residentShirtA);
+    resident.group.position.set(-28, 0, 7.8);
+    worldGroup.add(resident.group);
+
+    // TANAH Compost Worker Actor
+    const worker = createHumanFigure(MATS.workerVest);
+    worker.group.position.set(-2.0, 0, 14.0);
+    worldGroup.add(worker.group);
+
+    // Household Food Scraps Cluster (Vegetable peelings, leftover rice, organic scraps)
+    const foodScrapCluster = new THREE.Group();
+    const scrapRice = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), MATS.riceScraps);
+    const scrapVeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.18), MATS.vegScraps);
+    scrapVeg.position.set(0.14, 0.05, 0.08);
+    const scrapPeel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.18, 8), MATS.foodScraps);
+    scrapPeel.position.set(-0.12, 0.06, -0.06);
+    foodScrapCluster.add(scrapRice, scrapVeg, scrapPeel);
+    worldGroup.add(foodScrapCluster);
+
+    // Non-compostable plastic contaminant piece (Removed during Scene 5 inspection)
+    const contaminantPiece = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.24), MATS.plasticContam);
+    contaminantPiece.visible = false;
+    worldGroup.add(contaminantPiece);
+
+    // Dry Leaves Carbon Layer Cluster (Added during Scene 6)
+    const carbonLayerCluster = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.35, 10), MATS.dryLeaves);
+    carbonLayerCluster.visible = false;
+    worldGroup.add(carbonLayerCluster);
+
+    // Portable 5L Food Waste Caddy / Transport Container
+    const portableCaddy = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.44, 0.42), MATS.foodCaddy);
+    portableCaddy.position.set(-24, 0.5, 8.2);
+    enableShadows(portableCaddy);
+    worldGroup.add(portableCaddy);
+
+    // Compost Transfer Crate / Wheelbarrow Box (Scene 8)
+    const compostTransferCrate = new THREE.Group();
+    const crateBox = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.45, 0.65), MATS.soil ? MATS.timberBay : MATS.timberBay);
+    const crateCompost = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.28, 0.55), MATS.treatedSoilRich);
+    crateCompost.position.y = 0.18;
+    compostTransferCrate.add(crateBox, crateCompost);
+    compostTransferCrate.visible = false;
+    enableShadows(compostTransferCrate);
+    worldGroup.add(compostTransferCrate);
+
+    // Municipal Waste Collection Compactor Truck
+    const wasteTruck = createTruck(true);
+    wasteTruck.group.position.set(-55, 0, -2.2);
+    worldGroup.add(wasteTruck.group);
+
+    // Separate Purchased Compost Delivery Truck
+    const compostSupplierTruck = createTruck(false);
+    compostSupplierTruck.group.position.set(85, 0, 2.2);
+    compostSupplierTruck.group.rotation.y = Math.PI;
+    worldGroup.add(compostSupplierTruck.group);
+
+    // ============================================================================
+    // 7. SCENE 9 CIRCULAR WORKFLOW ROUTE ARROWS & FADING LANDFILL LINE
+    // ============================================================================
+    const loopVisualsGroup = new THREE.Group();
+    loopVisualsGroup.visible = false;
+    scene.add(loopVisualsGroup);
+
+    function createAnimatedRouteTube(points, colorHex) {
+      const curve = new THREE.CatmullRomCurve3(points);
+      const geo = new THREE.TubeGeometry(curve, 64, 0.35, 8, false);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.85
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+
+      // Directional Arrow Cones along curve
+      const cones = [];
+      for (let i = 1; i <= 4; i++) {
+        const cone = new THREE.Mesh(
+          new THREE.ConeGeometry(0.85, 2.0, 12),
+          new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.95 })
+        );
+        cone.rotation.x = Math.PI / 2;
+        mesh.add(cone);
+        cones.push(cone);
+      }
+      return { mesh, curve, mat, cones };
+    }
+
+    // Local Loop 1: Residential Blocks -> Food-Waste Collection Point -> TANAH Composting Bay
+    const routeCollect = createAnimatedRouteTube([
+      new THREE.Vector3(-34, 1.5, -10),
+      new THREE.Vector3(-24, 1.5, 7.6),
+      new THREE.Vector3(0, 1.5, 12.5)
+    ], 0x6ea832);
+
+    // Local Loop 2: TANAH Composting Bay -> Nearby Treated Landscape Beds (<200m)
+    const routeApply = createAnimatedRouteTube([
+      new THREE.Vector3(0, 1.5, 12.5),
+      new THREE.Vector3(8, 1.8, 12.5),
+      new THREE.Vector3(15.5, 1.5, 12.5),
+      new THREE.Vector3(29.0, 1.5, 12.5)
+    ], 0xd49b35);
+
+    // Conventional Long-Distance Landfill Route (Fades into background in Scene 9)
+    const routeLandfill = createAnimatedRouteTube([
+      new THREE.Vector3(-24, 1.2, -2.2),
+      new THREE.Vector3(40, 1.2, -2.2),
+      new THREE.Vector3(135, 1.2, -4.0)
+    ], 0x9A3B1B);
+
+    loopVisualsGroup.add(routeCollect.mesh, routeApply.mesh, routeLandfill.mesh);
+
+    // ============================================================================
+    // 8. ANIMATION HELPERS & CAMERA INTERPOLATION
+    // ============================================================================
+    function clamp01(v) {
+      return Math.max(0, Math.min(1, v));
+    }
+
+    function smoothstep(edge0, edge1, x) {
+      const t = clamp01((x - edge0) / (edge1 - edge0));
+      return t * t * (3 - 2 * t);
+    }
+
+    function lerpVec3(v1, v2, alpha) {
+      return new THREE.Vector3().lerpVectors(v1, v2, alpha);
+    }
+
+    function animateWalkCycle(actor, speed, time, carrying = false) {
+      const swing = Math.sin(time * speed) * 0.55;
+      actor.leftLeg.rotation.x = swing;
+      actor.rightLeg.rotation.x = -swing;
+      actor.leftArmPivot.rotation.x = carrying ? -0.65 : -swing * 0.7;
+      actor.rightArmPivot.rotation.x = carrying ? -0.65 : swing * 0.7;
+    }
+
+    function resetActorPose(actor) {
+      actor.leftLeg.rotation.x = 0;
+      actor.rightLeg.rotation.x = 0;
+      actor.leftArmPivot.rotation.set(0, 0, 0);
+      actor.rightArmPivot.rotation.set(0, 0, 0);
+    }
+
+    // ============================================================================
+    // 9. MASTER CONTINUOUS TIMELINE DIRECTOR (0s – 78s)
+    // ============================================================================
+    const uiChapter = document.getElementById('hud-chapter');
+    const uiTitle = document.getElementById('hud-title');
+    const uiCaption = document.getElementById('hud-caption');
+    const uiProvenance = document.getElementById('hud-provenance');
+    const uiCard = document.getElementById('chapter-card');
+    const uiCallout = document.getElementById('world-callout');
+    const uiSplitOverlay = document.getElementById('split-compare-overlay');
+    const uiFinalModal = document.getElementById('final-comparison-modal');
+    const uiTimelineFill = document.getElementById('timeline-fill');
+    const uiTimeReadout = document.getElementById('time-readout');
+
+    function formatMMSS(sec) {
+      const s = Math.floor(Math.max(0, sec));
+      const m = Math.floor(s / 60);
+      const rem = s % 60;
+      return `${String(m).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+    }
+
+    function updateSceneAtTime(t) {
+      // Find active scene metadata
+      const activeScene = SCENES.find((s) => t >= s.start && t < s.end) || SCENES[SCENES.length - 1];
+
+      uiChapter.textContent = activeScene.eyebrow;
+      uiTitle.textContent = activeScene.title;
+      uiCaption.textContent = activeScene.caption;
+      uiCard.style.borderLeftColor = activeScene.accent;
+      uiProvenance.innerHTML = `<strong>${activeScene.provenance}</strong>Physical workflow demonstration · No unverified claims`;
+
+      uiTimelineFill.style.width = `${(t / TOTAL_DURATION) * 100}%`;
+      uiTimeReadout.textContent = `${formatMMSS(t)} / ${formatMMSS(TOTAL_DURATION)}`;
+
+      // Highlight active chapter button
+      document.getElementById('btn-ch1').classList.toggle('active', activeScene.chapter === 1);
+      document.getElementById('btn-ch2').classList.toggle('active', activeScene.chapter === 2);
+      document.getElementById('btn-ch3').classList.toggle('active', activeScene.chapter === 3);
+
+      // Default visibility resets
+      uiCallout.style.opacity = '0';
+      uiSplitOverlay.style.opacity = '0';
+      uiFinalModal.style.opacity = '0';
+      loopVisualsGroup.visible = false;
+      contaminantPiece.visible = false;
+      carbonLayerCluster.visible = false;
+      compostTransferCrate.visible = false;
+      wasteTruck.bodyPivot.rotation.z = 0;
+
+      // ------------------------------------------------------------------------
+      // SCENE 1 (0–5s): Wide Aerial Establish of Malaysian Township
+      // ------------------------------------------------------------------------
+      if (t < 5) {
+        const p = smoothstep(0, 5, t);
+        const camPos = lerpVec3(new THREE.Vector3(-68, 46, 58), new THREE.Vector3(-38, 22, 30), p);
+        const lookAt = lerpVec3(new THREE.Vector3(0, 4, 0), new THREE.Vector3(-24, 2, 6), p);
+        camera.position.copy(camPos);
+        camera.lookAt(lookAt);
+
+        resident.group.position.set(-30, 0, 2.0);
+        resetActorPose(resident);
+        foodScrapCluster.position.set(-30, 1.1, 2.4);
+        portableCaddy.visible = false;
+        wasteTruck.group.position.set(-60, 0, -2.2);
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENE 1B (5–13s): Resident Generates & Places Food Scraps into General Waste Bin
+      // ------------------------------------------------------------------------
+      else if (t >= 5 && t < 13) {
+        const p = smoothstep(5, 13, t);
+        const camPos = lerpVec3(new THREE.Vector3(-30, 5.2, 15.5), new THREE.Vector3(-20.5, 3.6, 11.8), p);
+        const lookAt = lerpVec3(new THREE.Vector3(-25, 1.2, 6.5), new THREE.Vector3(-24.5, 1.1, 7.2), p);
+        camera.position.copy(camPos);
+        camera.lookAt(lookAt);
+
+        portableCaddy.visible = false;
+
+        // Walk from apartment walkway toward municipal general waste bin (t: 5 -> 9.5)
+        if (t < 9.5) {
+          const wp = smoothstep(5, 9.5, t);
+          resident.group.position.lerpVectors(new THREE.Vector3(-30, 0, 3.0), new THREE.Vector3(-25.1, 0, 8.1), wp);
+          resident.group.rotation.y = Math.atan2(4.9, 5.1);
+          animateWalkCycle(resident, 8, t, true);
+          foodScrapCluster.position.copy(resident.group.position).add(new THREE.Vector3(0.25, 1.1, -0.2));
+        } else {
+          // Drop food scraps (vegetable peelings, leftover rice) into general municipal bin
+          const dp = smoothstep(9.5, 12.2, t);
+          resident.group.position.set(-25.1, 0, 8.1);
+          resident.group.rotation.y = Math.PI;
+          resetActorPose(resident);
+          resident.rightArmPivot.rotation.x = -1.2 * Math.sin(dp * Math.PI);
+
+          const arcY = 1.25 + Math.sin(dp * Math.PI) * 0.55 - dp * 0.45;
+          foodScrapCluster.position.set(
+            THREE.MathUtils.lerp(-25.1, -25.1, dp),
+            arcY,
+            THREE.MathUtils.lerp(7.8, 7.3, dp)
+          );
+        }
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENE 2 (13–20s): Conventional Collection Truck Drives to Landfill & Unloads
+      // ------------------------------------------------------------------------
+      else if (t >= 13 && t < 20) {
+        foodScrapCluster.visible = false;
+        // Sub-phase A (13–17.2s): Truck collects at township bin and drives out along road
+        if (t < 17.2) {
+          const p = smoothstep(13, 17.2, t);
+          const truckX = THREE.MathUtils.lerp(-24, 95, p);
+          wasteTruck.group.position.set(truckX, 0, -2.2);
+          wasteTruck.group.rotation.y = 0;
+
+          camera.position.set(truckX - 16, 6.8 + p * 4.0, 14.0);
+          camera.lookAt(truckX + 4, 1.8, -2.2);
+        } else {
+          // Sub-phase B (17.2–20s): Arrival at landfill environment & unloading waste
+          const p = smoothstep(17.2, 20, t);
+          wasteTruck.group.position.set(131, 0, 4.0);
+          wasteTruck.group.rotation.y = Math.PI;
+          wasteTruck.bodyPivot.rotation.z = -p * 0.52; // Tilt hopper to unload
+
+          camera.position.set(118, 6.5, 16.5);
+          camera.lookAt(134, 2.4, 3.0);
+
+          uiCallout.textContent = 'LANDFILL UNLOADING · Distance illustrative (40 km benchmark in spec)';
+          uiCallout.style.opacity = '1';
+        }
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENE 3 (20–25s): Separate Compost Procurement Arrives & Applied to Bed
+      // ------------------------------------------------------------------------
+      else if (t >= 20 && t < 25) {
+        foodScrapCluster.visible = false;
+        uiSplitOverlay.style.opacity = '1';
+
+        const p = smoothstep(20, 25, t);
+        // Outbound waste truck continues departing in background while inbound supplier truck arrives
+        wasteTruck.group.position.set(THREE.MathUtils.lerp(20, 80, p), 0, -2.2);
+        wasteTruck.group.rotation.y = 0;
+
+        const supplierX = THREE.MathUtils.lerp(48, 18, p);
+        compostSupplierTruck.group.position.set(supplierX, 0, 3.2);
+        compostSupplierTruck.group.rotation.y = Math.PI;
+
+        // Worker applying purchased bagged input to planting bed
+        worker.group.position.set(14.5, 0, 10.2);
+        worker.group.rotation.y = 0;
+        worker.rightArmPivot.rotation.x = -0.6 + Math.sin(t * 6) * 0.35;
+
+        camera.position.set(16, 11.5, 28);
+        camera.lookAt(18, 1.5, 6);
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENE 4 (25–30s): Transition to TANAH — Source Separation & Short Transfer (<200m)
+      // ------------------------------------------------------------------------
+      else if (t >= 25 && t < 30) {
+        compostSupplierTruck.group.position.set(120, 0, 3.2);
+        wasteTruck.group.position.set(-80, 0, -2.2);
+        foodScrapCluster.visible = true;
+        portableCaddy.visible = true;
+
+        const p = smoothstep(25, 30, t);
+        // Smooth camera move from conventional collection point to neighbourhood composting station
+        const camPos = lerpVec3(new THREE.Vector3(-25, 4.5, 15.5), new THREE.Vector3(-5, 4.2, 19.0), p);
+        const lookAt = lerpVec3(new THREE.Vector3(-22, 1.2, 8.0), new THREE.Vector3(-2, 1.2, 12.0), p);
+        camera.position.copy(camPos);
+        camera.lookAt(lookAt);
+
+        // Resident deposits food scraps into green TANAH caddy, then worker carries caddy to nearby composting station
+        if (t < 26.8) {
+          const dp = smoothstep(25, 26.8, t);
+          resident.group.position.set(-22.6, 0, 8.6);
+          resident.group.rotation.y = Math.PI;
+          portableCaddy.position.set(-22.6, 0.45, 8.0);
+          foodScrapCluster.position.set(-22.6, 1.15 - dp * 0.55, 8.0);
+        } else {
+          const tp = smoothstep(26.8, 30, t);
+          const carryX = THREE.MathUtils.lerp(-22.0, -2.5, tp);
+          worker.group.position.set(carryX, 0, 9.2 + tp * 4.2);
+          worker.group.rotation.y = Math.PI / 2;
+          animateWalkCycle(worker, 9, t, true);
+
+          portableCaddy.position.copy(worker.group.position).add(new THREE.Vector3(0.35, 1.0, 0));
+          foodScrapCluster.position.copy(portableCaddy.position).add(new THREE.Vector3(0, 0.22, 0));
+        }
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENE 5 (30–38s): Manual Weighing on Scale & Visual Sorting of Contaminants
+      // ------------------------------------------------------------------------
+      else if (t >= 30 && t < 38) {
+        const p = smoothstep(30, 38, t);
+        // Close-up camera on scale and sorting table at the TANAH station
+        camera.position.lerpVectors(new THREE.Vector3(-4.2, 2.5, 16.2), new THREE.Vector3(-1.4, 2.35, 15.6), p);
+        camera.lookAt(-1.8, 1.05, 13.5);
+
+        worker.group.position.set(-2.1, 0, 14.35);
+        worker.group.rotation.y = Math.PI;
+        resetActorPose(worker);
+
+        // Caddy placed directly on the manual platform scale
+        portableCaddy.visible = true;
+        portableCaddy.position.set(-2.1, 1.12, 13.6);
+        foodScrapCluster.visible = true;
+        foodScrapCluster.position.set(-2.1, 1.36, 13.6);
+
+        uiCallout.style.opacity = '1';
+        if (t < 34) {
+          uiCallout.textContent = '≈ ILLUSTRATIVE DEMO WEIGHT: 14.2 kg (Manual Scale)';
+          worker.rightArmPivot.rotation.x = -0.5;
+        } else {
+          // Worker picks out blue plastic contaminant and drops it into clay-red rejection container
+          const sp = smoothstep(34, 37.5, t);
+          uiCallout.textContent = 'CONTAMINATION CHECK: Non-compostable plastic removed → Reject bin';
+          contaminantPiece.visible = true;
+          worker.rightArmPivot.rotation.x = -0.85;
+          worker.rightArmPivot.rotation.z = -sp * 0.4;
+
+          const contamX = THREE.MathUtils.lerp(-2.1, -1.05, sp);
+          const contamY = 1.38 + Math.sin(sp * Math.PI) * 0.42 - sp * 0.55;
+          const contamZ = THREE.MathUtils.lerp(13.6, 13.7, sp);
+          contaminantPiece.position.set(contamX, contamY, contamZ);
+        }
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENES 6 & 7 (38–48s): Transfer to Bays, Dry Leaves Added, Turning & 4-Stage Maturation
+      // ------------------------------------------------------------------------
+      else if (t >= 38 && t < 48) {
+        portableCaddy.visible = false;
+        foodScrapCluster.visible = false;
+
+        const p = smoothstep(38, 48, t);
+        camera.position.lerpVectors(new THREE.Vector3(-2.6, 2.9, 16.5), new THREE.Vector3(2.4, 2.7, 16.2), p);
+        camera.lookAt(0, 1.0, 11.9);
+
+        const bay1 = primaryCompostNode.bays[0];
+        const bay2 = primaryCompostNode.bays[1];
+        const bay3 = primaryCompostNode.bays[2];
+
+        // Sub-stage 1 (38–41s): Adding dry leaves (carbon source) & mixing in Bay 1
+        if (t < 41) {
+          const cp = smoothstep(38, 41, t);
+          worker.group.position.set(THREE.MathUtils.lerp(1.6, -1.4, cp), 0, 13.2);
+          worker.group.rotation.y = Math.PI;
+          worker.rightArmPivot.rotation.x = -0.7 + Math.sin(t * 8) * 0.4;
+
+          carbonLayerCluster.visible = true;
+          carbonLayerCluster.position.set(-1.6, 0.85, 11.85);
+          uiCallout.style.opacity = '1';
+          uiCallout.textContent = 'STAGE 1: Fresh food waste + dry leaves (carbon source) mixed';
+        }
+        // Sub-stage 2 (41–43.5s): Active composting & condition check
+        else if (t >= 41 && t < 43.5) {
+          worker.group.position.set(-1.5, 0, 13.1);
+          worker.group.rotation.y = Math.PI;
+          worker.rightArmPivot.rotation.x = -0.6;
+          bay1.pileMat.color.setHex(0x8a5a2b);
+          uiCallout.style.opacity = '1';
+          uiCallout.textContent = 'STAGE 2 (TIME-LAPSE): Active composting pile · Worker condition check';
+        }
+        // Sub-stage 3 (43.5–46s): Maturing compost in Bay 2
+        else if (t >= 43.5 && t < 46) {
+          worker.group.position.set(0.0, 0, 13.1);
+          worker.group.rotation.y = Math.PI;
+          bay2.pileMat.color.setHex(0x593e22);
+          bay2.pile.scale.set(1.15, 0.72, 1.05);
+          uiCallout.style.opacity = '1';
+          uiCallout.textContent = 'STAGE 3 (TIME-LAPSE): Maturing compost — darker, more uniform texture';
+        }
+        // Sub-stage 4 (46–48s): Finished dark mature compost in Bay 3 ready for soil application
+        else {
+          worker.group.position.set(1.5, 0, 13.1);
+          worker.group.rotation.y = Math.PI;
+          bay3.pileMat.color.setHex(0x2e1f11);
+          bay3.pile.scale.set(1.2, 0.68, 1.1);
+          uiCallout.style.opacity = '1';
+          uiCallout.textContent = 'STAGE 4 (TIME-LAPSE): Finished compost ready for landscape bed use';
+        }
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENE 8 (48–58s): Mature Compost Carried Short Distance & Applied to Soil Around Plants
+      // ------------------------------------------------------------------------
+      else if (t >= 48 && t < 58) {
+        compostTransferCrate.visible = true;
+
+        // Sub-phase A (48–53s): Worker carries mature compost from Bay 3 to nearby planting bed (15m away)
+        if (t < 53) {
+          const wp = smoothstep(48, 53, t);
+          const wx = THREE.MathUtils.lerp(1.8, 13.2, wp);
+          worker.group.position.set(wx, 0, 12.5);
+          worker.group.rotation.y = Math.PI / 2;
+          animateWalkCycle(worker, 8.5, t, true);
+
+          compostTransferCrate.position.set(wx + 0.55, 0.95, 12.5);
+
+          // Camera establishes clear spatial proximity between composting point and planting bed
+          camera.position.set(wx - 4.5, 4.2, 21.5);
+          camera.lookAt(wx + 3.0, 1.0, 12.5);
+
+          uiCallout.style.opacity = '1';
+          uiCallout.textContent = 'SHORT-DISTANCE TRANSFER (<200 m): Compost Bay → Nearby Landscape Bed';
+        }
+        // Sub-phase B (53–58s): Applying mature compost to root-zone soil around existing shrubs
+        else {
+          const ap = smoothstep(53, 58, t);
+          worker.group.position.set(13.2, 0, 12.5);
+          worker.group.rotation.y = Math.PI / 2;
+          resetActorPose(worker);
+          worker.rightArmPivot.rotation.x = -0.55 + Math.sin(t * 7) * 0.35;
+
+          compostTransferCrate.position.set(13.5, 0.42, 11.2);
+
+          // Soil around plant bases darkens as rich compost top-dressing expands on soil (not leaves)
+          const patchScale = THREE.MathUtils.lerp(0.1, 2.2, ap);
+          treatedBed.mulchPatch.scale.set(patchScale, 1, patchScale * 0.75);
+          treatedBed.soilMat.color.lerpColors(new THREE.Color(0x5c4630), new THREE.Color(0x362617), ap);
+
+          camera.position.set(11.8, 2.8, 16.8);
+          camera.lookAt(14.5, 0.65, 12.5);
+
+          uiCallout.style.opacity = '1';
+          uiCallout.textContent = 'SOIL APPLICATION: Applied to soil around plants (Treated vs Control bed)';
+        }
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENE 9 (58–70s): Camera Pullback — The Proposed Local Circular Workflow
+      // ------------------------------------------------------------------------
+      else if (t >= 58 && t < 70) {
+        const p = smoothstep(58, 70, t);
+        camera.position.lerpVectors(new THREE.Vector3(8, 22, 34), new THREE.Vector3(4, 58, 68), p);
+        camera.lookAt(4, 0, 2);
+
+        loopVisualsGroup.visible = true;
+
+        // Animate directional arrows along local loop routes
+        [routeCollect, routeApply].forEach((route) => {
+          route.cones.forEach((cone, idx) => {
+            const u = ((t * 0.22 + idx * 0.25) % 1.0);
+            const pt = route.curve.getPointAt(u);
+            const tangent = route.curve.getTangentAt(u);
+            cone.position.copy(pt);
+            cone.lookAt(pt.clone().add(tangent));
+          });
+        });
+
+        // Fade conventional long-distance landfill route into the background
+        const landfillFade = Math.max(0.12, 0.75 - p * 0.65);
+        routeLandfill.mat.opacity = landfillFade;
+        routeLandfill.cones.forEach((c) => {
+          c.material.opacity = landfillFade;
+        });
+
+        uiCallout.style.opacity = '1';
+        uiCallout.textContent = 'PROPOSED LOCAL LOOP: 5–8 Neighbourhood Points (<200 m to planting beds)';
+      }
+
+      // ------------------------------------------------------------------------
+      // SCENE 10 (70–78s): Final Comparison & Closing Message
+      // ------------------------------------------------------------------------
+      else {
+        const p = smoothstep(70, 72.5, t);
+        camera.position.set(4, 60, 70);
+        camera.lookAt(4, 0, 2);
+        loopVisualsGroup.visible = true;
+        uiFinalModal.style.opacity = String(p);
+      }
+    }
+
+    // ============================================================================
+    // 10. PLAYBACK TRANSPORT CONTROLS (PLAY / PAUSE / REPLAY / CHAPTER SKIP)
+    // ============================================================================
+    let isPlaying = true;
+    let currentTime = 0;
+    let lastFrameTime = performance.now();
+
+    const btnPlayPause = document.getElementById('btn-play-pause');
+    const btnReplay = document.getElementById('btn-replay');
+    const timelineTrack = document.getElementById('timeline-track');
+
+    function setPlayingState(play) {
+      isPlaying = play;
+      btnPlayPause.textContent = isPlaying ? 'PAUSE' : 'PLAY';
+    }
+
+    btnPlayPause.addEventListener('click', () => {
+      if (currentTime >= TOTAL_DURATION) {
+        currentTime = 0;
+      }
+      setPlayingState(!isPlaying);
+    });
+
+    btnReplay.addEventListener('click', () => {
+      currentTime = 0;
+      setPlayingState(true);
+    });
+
+    document.getElementById('btn-ch1').addEventListener('click', () => {
+      currentTime = 0;
+      updateSceneAtTime(currentTime);
+    });
+
+    document.getElementById('btn-ch2').addEventListener('click', () => {
+      currentTime = 25.0;
+      updateSceneAtTime(currentTime);
+    });
+
+    document.getElementById('btn-ch3').addEventListener('click', () => {
+      currentTime = 48.0;
+      updateSceneAtTime(currentTime);
+    });
+
+    timelineTrack.addEventListener('click', (e) => {
+      const rect = timelineTrack.getBoundingClientRect();
+      const ratio = clamp01((e.clientX - rect.left) / rect.width);
+      currentTime = ratio * TOTAL_DURATION;
+      updateSceneAtTime(currentTime);
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Main Render & Animation Loop
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = (now - lastFrameTime) / 1000;
+      lastFrameTime = now;
+
+      if (isPlaying) {
+        currentTime += dt;
+        if (currentTime >= TOTAL_DURATION) {
+          currentTime = TOTAL_DURATION;
+          setPlayingState(false);
+        }
+      }
+
+      updateSceneAtTime(currentTime);
+      renderer.render(scene, camera);
+    }
+
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
